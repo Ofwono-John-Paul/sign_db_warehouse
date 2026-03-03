@@ -1,10 +1,15 @@
 from flask import Flask, request, jsonify, render_template_string
 from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
 import os
 from dotenv import load_dotenv
 from datetime import datetime
 
 app = Flask(__name__)
+
+# Enable CORS right after creating app
+CORS(app)
+
 
 load_dotenv()
 
