@@ -25,7 +25,6 @@ class UploadScreen extends StatefulWidget {
 }
 
 class _UploadScreenState extends State<UploadScreen> {
-
   final TextEditingController titleController = TextEditingController();
   final TextEditingController categoryController = TextEditingController();
   final TextEditingController uploaderController = TextEditingController();
@@ -35,6 +34,7 @@ class _UploadScreenState extends State<UploadScreen> {
   Future<void> pickVideo() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.video,
+      withData: true, // IMPORTANT for Flutter Web
     );
 
     if (result != null) {
@@ -45,37 +45,59 @@ class _UploadScreenState extends State<UploadScreen> {
   }
 
   Future<void> uploadVideo() async {
-
     if (selectedFile == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Please select a video")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select a video")),
+      );
       return;
     }
 
-    var request = http.MultipartRequest(
-      'POST',
-      Uri.parse('http://127.0.0.1:5000/upload'),
-    );
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('http://127.0.0.1:5000/upload'),
+      );
 
-    request.fields['title'] = titleController.text;
-    request.fields['category'] = categoryController.text;
-    request.fields['uploader_name'] = uploaderController.text;
+      request.fields['title'] = titleController.text;
+      request.fields['category'] = categoryController.text;
+      request.fields['uploader_name'] = uploaderController.text;
 
-    request.files.add(
-      await http.MultipartFile.fromPath(
-        'file',
-        selectedFile!.path!,
-      ),
-    );
+      // For Flutter Web we use bytes, not fromPath
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          selectedFile!.bytes!,
+          filename: selectedFile!.name,
+        ),
+      );
 
-    var response = await request.send();
+      var response = await request.send();
 
-    if (response.statusCode == 200) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Upload Successful")));
-    } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Upload Failed")));
+      if (response.statusCode == 200) {
+
+        // ✅ Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Upload Successful")),
+        );
+
+        // ✅ Clear form
+        setState(() {
+          titleController.clear();
+          categoryController.clear();
+          uploaderController.clear();
+          selectedFile = null;
+        });
+
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Upload Failed")),
+        );
+      }
+
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
     }
   }
 
@@ -87,7 +109,6 @@ class _UploadScreenState extends State<UploadScreen> {
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-
             TextField(
               controller: titleController,
               decoration: const InputDecoration(labelText: "Title"),
