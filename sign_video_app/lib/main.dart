@@ -27,14 +27,22 @@ class UploadScreen extends StatefulWidget {
 class _UploadScreenState extends State<UploadScreen> {
   final TextEditingController titleController = TextEditingController();
   final TextEditingController categoryController = TextEditingController();
-  final TextEditingController uploaderController = TextEditingController();
 
   PlatformFile? selectedFile;
+
+  int? selectedSchoolId;
+
+  // TEMP MOCK DATA (later we fetch from Flask)
+  final List<Map<String, dynamic>> schools = [
+    {"school_id": 1, "school_name": "Kampala School for the Deaf"},
+    {"school_id": 2, "school_name": "Mbarara Special Needs School"},
+    {"school_id": 3, "school_name": "Gulu Deaf Primary School"},
+  ];
 
   Future<void> pickVideo() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.video,
-      withData: true, // IMPORTANT for Flutter Web
+      withData: true,
     );
 
     if (result != null) {
@@ -45,9 +53,9 @@ class _UploadScreenState extends State<UploadScreen> {
   }
 
   Future<void> uploadVideo() async {
-    if (selectedFile == null) {
+    if (selectedFile == null || selectedSchoolId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please select a video")),
+        const SnackBar(content: Text("Select school and video")),
       );
       return;
     }
@@ -60,9 +68,8 @@ class _UploadScreenState extends State<UploadScreen> {
 
       request.fields['title'] = titleController.text;
       request.fields['category'] = categoryController.text;
-      request.fields['uploader_name'] = uploaderController.text;
+      request.fields['school_id'] = selectedSchoolId.toString();
 
-      // For Flutter Web we use bytes, not fromPath
       request.files.add(
         http.MultipartFile.fromBytes(
           'file',
@@ -74,26 +81,21 @@ class _UploadScreenState extends State<UploadScreen> {
       var response = await request.send();
 
       if (response.statusCode == 200) {
-
-        // ✅ Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Upload Successful")),
         );
 
-        // ✅ Clear form
         setState(() {
           titleController.clear();
           categoryController.clear();
-          uploaderController.clear();
           selectedFile = null;
+          selectedSchoolId = null;
         });
-
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Upload Failed")),
         );
       }
-
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: $e")),
@@ -119,9 +121,23 @@ class _UploadScreenState extends State<UploadScreen> {
               decoration: const InputDecoration(labelText: "Category"),
             ),
 
-            TextField(
-              controller: uploaderController,
-              decoration: const InputDecoration(labelText: "Uploader Name"),
+            const SizedBox(height: 15),
+
+            // 🔥 School Dropdown
+            DropdownButtonFormField<int>(
+              decoration: const InputDecoration(labelText: "Select School"),
+              value: selectedSchoolId,
+              items: schools.map((school) {
+                return DropdownMenuItem<int>(
+                  value: school['school_id'],
+                  child: Text(school['school_name']),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  selectedSchoolId = value;
+                });
+              },
             ),
 
             const SizedBox(height: 20),
