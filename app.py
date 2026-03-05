@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, supports_credentials=True)
 
 load_dotenv()
 
@@ -28,10 +28,7 @@ bcrypt = Bcrypt(app)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# =========================
 # DATABASE MODELS
-# =========================
-
 class DimRegion(db.Model):
     __tablename__ = "dim_region"
     region_id = db.Column(db.Integer, primary_key=True)
@@ -68,10 +65,13 @@ class FactSignVideo(db.Model):
 with app.app_context():
     db.create_all()
 
-# =========================
-# REGISTER SCHOOL
-# =========================
+@app.route("/")
+def home():
+    return jsonify({
+        "message": "Sign Language Data Warehouse API is running"
+    })
 
+# REGISTER SCHOOL
 @app.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
@@ -105,10 +105,8 @@ def register():
 
     return jsonify({"message": "School registered successfully"}), 200
 
-# =========================
-# LOGIN
-# =========================
 
+# LOGIN
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -128,10 +126,7 @@ def login():
         "school_name": school.school_name
     }), 200
 
-# =========================
 # PROTECTED UPLOAD
-# =========================
-
 @app.route('/upload', methods=['POST'])
 @jwt_required()
 def upload():
@@ -167,7 +162,6 @@ def upload():
 
     return jsonify({"message": "Video uploaded successfully"}), 200
 
-# =========================
 
 if __name__ == '__main__':
     app.run(debug=True)
