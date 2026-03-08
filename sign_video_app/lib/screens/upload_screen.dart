@@ -67,7 +67,8 @@ class _UploadScreenState extends State<UploadScreen> {
         titleController.text,
         selectedCategory!,
         selectedSignName!,
-        selectedFile!.path!,
+        selectedFile!.bytes!,
+        selectedFile!.name,
         'Web Upload',
       );
 
