@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'dart:io';
 import '../services/api_service.dart';
 
 class UploadScreen extends StatefulWidget {
@@ -146,15 +145,11 @@ class _UploadScreenState extends State<UploadScreen> {
     setState(() => isUploading = true);
 
     try {
-      // Read file bytes
-      final file = File(selectedFile!.path!);
-      final fileBytes = await file.readAsBytes();
-
       bool success = await ApiService.uploadVideo(
         titleController.text,
         selectedCategory!,
         selectedGloss!,
-        fileBytes,
+        selectedFile!.bytes!,
         selectedFile!.name,
         'Web Upload',
       );
