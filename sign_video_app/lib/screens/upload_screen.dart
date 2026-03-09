@@ -11,110 +11,13 @@ class UploadScreen extends StatefulWidget {
 
 class _UploadScreenState extends State<UploadScreen> {
   final titleController = TextEditingController();
+  final glossController = TextEditingController();
   String? selectedCategory;
-  String? selectedGloss;
   PlatformFile? selectedFile;
   bool isUploading = false;
 
   // Updated sign categories - Health and Education
   final List<String> categories = ['Health', 'Education'];
-
-  // Updated gloss names based on category
-  final Map<String, List<String>> glossNames = {
-    'Health': [
-      'Fever',
-      'Cough',
-      'Headache',
-      'Stomach Ache',
-      'Chest Pain',
-      'Dizziness',
-      'Nausea',
-      'Fatigue',
-      'Shortness of Breath',
-      'Body Weakness',
-      'Loss of Appetite',
-      'Weight Loss',
-      'Vision Problems',
-      'Hearing Problems',
-      'Skin Rash',
-      'Joint Pain',
-      'Back Pain',
-      'Toothache',
-      'Menstrual Pain',
-      'Pregnancy',
-      'Diabetes',
-      'Hypertension',
-      'Malaria',
-      'Typhoid',
-      'HIV/AIDS',
-      'Tuberculosis',
-      'Yes',
-      'No',
-      'Help',
-      'Emergency',
-      'Doctor',
-      'Nurse',
-      'Hospital',
-      'Medicine',
-      'Injection',
-      'Blood Test',
-      'X-Ray',
-      'Surgery',
-      'Ambulance',
-      'Pharmacy',
-      'Health Center',
-      'Clinic',
-    ],
-    'Education': [
-      'Student',
-      'Teacher',
-      'School',
-      'Class',
-      'Book',
-      'Pen',
-      'Notebook',
-      'Paper',
-      'Write',
-      'Read',
-      'Study',
-      'Learn',
-      'Teach',
-      'Exam',
-      'Test',
-      'Quiz',
-      'Homework',
-      'Project',
-      'Science',
-      'Math',
-      'English',
-      'Social Studies',
-      'Geography',
-      'History',
-      'Art',
-      'Music',
-      'Sports',
-      'Library',
-      'Principal',
-      'Headmaster',
-      'Office',
-      'Playground',
-      'Uniform',
-      'Bag',
-      'Chair',
-      'Desk',
-      'Blackboard',
-      'Chalk',
-      'Map',
-      'Globe',
-      'Computer',
-      'Understand',
-      'Remember',
-      'Think',
-      'Question',
-      'Answer',
-      'Explain',
-    ],
-  };
 
   Future<void> pickVideo() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -132,7 +35,7 @@ class _UploadScreenState extends State<UploadScreen> {
   Future<void> uploadVideo() async {
     if (titleController.text.isEmpty ||
         selectedCategory == null ||
-        selectedGloss == null ||
+        glossController.text.isEmpty ||
         selectedFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -148,7 +51,7 @@ class _UploadScreenState extends State<UploadScreen> {
       bool success = await ApiService.uploadVideo(
         titleController.text,
         selectedCategory!,
-        selectedGloss!,
+        glossController.text.trim(),
         selectedFile!.bytes!,
         selectedFile!.name,
         'Web Upload',
@@ -164,8 +67,8 @@ class _UploadScreenState extends State<UploadScreen> {
         // Clear form
         setState(() {
           titleController.clear();
+          glossController.clear();
           selectedCategory = null;
-          selectedGloss = null;
           selectedFile = null;
         });
       } else {
@@ -253,40 +156,23 @@ class _UploadScreenState extends State<UploadScreen> {
                         onChanged: (value) {
                           setState(() {
                             selectedCategory = value;
-                            selectedGloss = null;
                           });
                         },
                       ),
                       const SizedBox(height: 20),
 
-                      // Gloss - Meaning of the sign
-                      DropdownButtonFormField<String>(
-                        value: selectedGloss,
+                      // Gloss - User types in the meaning of the sign
+                      TextField(
+                        controller: glossController,
                         decoration: InputDecoration(
                           labelText: "Gloss",
-                          hintText: "Meaning of the sign video",
+                          hintText:
+                              "Type the meaning/interpretation of the sign",
                           prefixIcon: const Icon(Icons.sign_language),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        items: selectedCategory != null
-                            ? (glossNames[selectedCategory] ?? [])
-                                  .map(
-                                    (gloss) => DropdownMenuItem(
-                                      value: gloss,
-                                      child: Text(gloss),
-                                    ),
-                                  )
-                                  .toList()
-                            : [],
-                        onChanged: selectedCategory == null
-                            ? null
-                            : (value) {
-                                setState(() {
-                                  selectedGloss = value;
-                                });
-                              },
                       ),
                       const SizedBox(height: 25),
 
