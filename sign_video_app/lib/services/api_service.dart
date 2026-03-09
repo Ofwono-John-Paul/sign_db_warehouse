@@ -42,21 +42,22 @@ class ApiService {
   }
 
   static Map<String, String> get authHeaders => {
-        "Content-Type": "application/json",
-        if (token != null) "Authorization": "Bearer $token"
-      };
+    "Content-Type": "application/json",
+    if (token != null) "Authorization": "Bearer $token",
+  };
 
   // ========================
   // AUTHENTICATION
   // ========================
 
   static Future<http.Response> register(
-      String schoolName,
-      String district,
-      String region,
-      String email,
-      String password,
-      String confirmPassword) async {
+    String schoolName,
+    String district,
+    String region,
+    String email,
+    String password,
+    String confirmPassword,
+  ) async {
     return await http.post(
       Uri.parse("$baseUrl/register"),
       headers: {"Content-Type": "application/json"},
@@ -66,7 +67,7 @@ class ApiService {
         "region": region,
         "email": email,
         "password": password,
-        "confirm_password": confirmPassword
+        "confirm_password": confirmPassword,
       }),
     );
   }
@@ -75,10 +76,7 @@ class ApiService {
     var response = await http.post(
       Uri.parse("$baseUrl/login"),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "email": email,
-        "password": password
-      }),
+      body: jsonEncode({"email": email, "password": password}),
     );
 
     if (response.statusCode == 200) {
@@ -92,7 +90,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>?> getCurrentSchool() async {
     if (token == null) return null;
-    
+
     var response = await http.get(
       Uri.parse("$baseUrl/me"),
       headers: authHeaders,
@@ -120,26 +118,22 @@ class ApiService {
       var uri = Uri.parse("$baseUrl/upload");
       var request = http.MultipartRequest('POST', uri);
 
-      request.headers.addAll({
-        "Authorization": "Bearer $token",
-      });
+      request.headers.addAll({"Authorization": "Bearer $token"});
 
       request.fields['title'] = title;
       request.fields['sign_category'] = signCategory;
       request.fields['sign_name'] = signName;
       request.fields['capture_device'] = captureDevice;
 
-      request.files.add(http.MultipartFile.fromBytes(
-        'file',
-        fileBytes,
-        filename: fileName,
-      ));
+      request.files.add(
+        http.MultipartFile.fromBytes('file', fileBytes, filename: fileName),
+      );
 
       var streamedResponse = await request.send();
       var response = await http.Response.fromStream(streamedResponse);
-      
+
       print("Upload response: ${response.statusCode} - ${response.body}");
-      
+
       return response.statusCode == 200;
     } catch (e) {
       print("Upload error: $e");
@@ -199,7 +193,9 @@ class ApiService {
     return {};
   }
 
-  static Future<List<dynamic>> getDatasetGrowth({String period = 'daily'}) async {
+  static Future<List<dynamic>> getDatasetGrowth({
+    String period = 'daily',
+  }) async {
     var response = await http.get(
       Uri.parse("$baseUrl/analytics/dataset-growth?period=$period"),
       headers: {"Content-Type": "application/json"},
@@ -238,6 +234,22 @@ class ApiService {
   static Future<List<dynamic>> getInferenceLogs({int limit = 50}) async {
     var response = await http.get(
       Uri.parse("$baseUrl/analytics/inference-logs?limit=$limit"),
+      headers: {"Content-Type": "application/json"},
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    return [];
+  }
+
+  // ========================
+  // VIDEO LIST
+  // ========================
+
+  static Future<List<dynamic>> getVideos() async {
+    var response = await http.get(
+      Uri.parse("$baseUrl/videos"),
       headers: {"Content-Type": "application/json"},
     );
 
