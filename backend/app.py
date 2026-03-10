@@ -29,10 +29,7 @@ bcrypt = Bcrypt(app)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# ============================================
 # DIMENSION TABLES (Normalized + Star Schema)
-# ============================================
-
 class DimRegion(db.Model):
     __tablename__ = "dim_region"
     region_id = db.Column(db.Integer, primary_key=True)
@@ -109,11 +106,7 @@ class DimModelVersion(db.Model):
     # Relationships
     inference_logs = db.relationship('FactInferenceLog', backref='model', lazy=True)
 
-
-# ============================================
 # FACT TABLES
-# ============================================
-
 class FactSignVideo(db.Model):
     __tablename__ = "fact_sign_video"
     fact_id = db.Column(db.Integer, primary_key=True)
@@ -134,11 +127,7 @@ class FactInferenceLog(db.Model):
     device_type = db.Column(db.String(50), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.now)
 
-
-# ============================================
 # DATABASE INITIALIZATION
-# ============================================
-
 with app.app_context():
     db.create_all()
     
@@ -207,11 +196,7 @@ with app.app_context():
         db.session.commit()
         print("Database seeded with initial data!")
 
-
-# ============================================
 # ROOT ENDPOINT
-# ============================================
-
 @app.route("/")
 def home():
     return jsonify({
@@ -230,11 +215,7 @@ def home():
         }
     })
 
-
-# ============================================
 # AUTHENTICATION ENDPOINTS
-# ============================================
-
 @app.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
@@ -338,11 +319,7 @@ def get_current_school():
         "registered_date": school.registered_date.isoformat() if school.registered_date else None
     }), 200
 
-
-# ============================================
 # VIDEO UPLOAD ENDPOINT
-# ============================================
-
 @app.route('/upload', methods=['POST'])
 @jwt_required()
 def upload_video():
@@ -400,10 +377,7 @@ def upload_video():
     }), 200
 
 
-# ============================================
 # ANALYTICS ENDPOINTS
-# ============================================
-
 @app.route('/analytics/videos-per-region', methods=['GET'])
 def videos_per_region():
     """Returns number of videos uploaded per region"""
@@ -651,11 +625,7 @@ def school_map():
     
     return jsonify(result), 200
 
-
-# ============================================
 # VIDEO LIST ENDPOINT
-# ============================================
-
 @app.route('/videos', methods=['GET'])
 def get_videos():
     """Returns list of all uploaded videos with their details"""
@@ -694,11 +664,7 @@ def get_videos():
         for v in videos
     ]), 200
 
-
-# ============================================
 # INFERENCE LOG ENDPOINT (Future)
-# ============================================
-
 @app.route('/inference/log', methods=['POST'])
 @jwt_required()
 def log_inference():
@@ -751,10 +717,9 @@ def get_inference_logs():
         for log in logs
     ]), 200
 
-
-# ============================================
 # MAIN ENTRY POINT
-# ============================================
-
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+# if __name__ == '__main__':
+#     app.run(debug=True, host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
