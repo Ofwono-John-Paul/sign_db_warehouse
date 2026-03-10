@@ -3,7 +3,12 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = "http://localhost:5000";
+  static const String baseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'http://localhost:5000',
+  );
+
+  // static const String baseUrl = "http://localhost:5000";
 
   static String? token;
   static int? schoolId;
@@ -243,9 +248,7 @@ class ApiService {
     return [];
   }
 
-  // ========================
   // VIDEO LIST
-  // ========================
 
   static Future<List<dynamic>> getVideos() async {
     var response = await http.get(
