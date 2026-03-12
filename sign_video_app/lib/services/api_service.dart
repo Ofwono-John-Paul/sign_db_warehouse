@@ -36,6 +36,17 @@ class ApiService {
     schoolName = prefs.getString("school_name");
   }
 
+  // Ensures protected requests do not send an empty/invalid bearer token.
+  static Future<String?> _getValidToken() async {
+    if (token == null || token!.isEmpty) {
+      await loadToken();
+    }
+    if (token == null || token!.isEmpty) {
+      return null;
+    }
+    return token;
+  }
+
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove("token");
@@ -86,7 +97,11 @@ class ApiService {
 
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
-      await saveToken(data['token']);
+      final jwt = (data['token'] ?? data['access_token'])?.toString();
+      if (jwt == null || jwt.isEmpty) {
+        return false;
+      }
+      await saveToken(jwt);
       await saveSchoolInfo(data['school_id'], data['school_name']);
       return true;
     }
@@ -120,10 +135,16 @@ class ApiService {
     String captureDevice,
   ) async {
     try {
+      final activeToken = await _getValidToken();
+      if (activeToken == null) {
+        print("Upload blocked: missing JWT token.");
+        return false;
+      }
+
       var uri = Uri.parse("$baseUrl/upload");
       var request = http.MultipartRequest('POST', uri);
 
-      request.headers.addAll({"Authorization": "Bearer $token"});
+      request.headers.addAll({"Authorization": "Bearer $activeToken"});
 
       request.fields['title'] = title;
       request.fields['sign_category'] = signCategory;
