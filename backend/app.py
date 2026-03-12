@@ -642,7 +642,7 @@ def get_videos():
     videos = db.session.query(
         DimVideo.video_id,
         DimVideo.title,
-        DimVideo.file_path,
+        DimVideo.video_url,
         DimVideo.capture_device,
         DimVideo.upload_date,
         DimVideo.dataset_version,
@@ -663,7 +663,7 @@ def get_videos():
         {
             "video_id": v.video_id,
             "title": v.title,
-            "file_path": v.file_path,
+            "video_url": v.video_url,
             "capture_device": v.capture_device,
             "upload_date": v.upload_date.isoformat() if v.upload_date else None,
             "dataset_version": v.dataset_version,
