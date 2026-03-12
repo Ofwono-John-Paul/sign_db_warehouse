@@ -137,7 +137,7 @@ class _UploadScreenState extends State<UploadScreen> {
 
                       // Sign Category - Health or Education
                       DropdownButtonFormField<String>(
-                        value: selectedCategory,
+                        initialValue: selectedCategory,
                         decoration: InputDecoration(
                           labelText: "Sign Category",
                           prefixIcon: const Icon(Icons.category),

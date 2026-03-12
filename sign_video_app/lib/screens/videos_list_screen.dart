@@ -102,7 +102,7 @@ class _VideosListScreenState extends State<VideosListScreen> {
                             itemBuilder: (context, index) {
                               final video = videos[index];
                               final isSelected =
-                                  selectedVideoPath == video['file_path'];
+                                  selectedVideoPath == video['video_url'];
 
                               return Card(
                                 margin: const EdgeInsets.symmetric(
@@ -209,7 +209,7 @@ class _VideosListScreenState extends State<VideosListScreen> {
                                   ),
                                   onTap: () {
                                     setState(() {
-                                      selectedVideoPath = video['file_path'];
+                                      selectedVideoPath = video['video_url'];
                                       selectedVideoTitle = video['title'];
                                     });
                                   },
