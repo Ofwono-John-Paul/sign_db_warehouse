@@ -14,15 +14,18 @@ from datetime import datetime, timedelta
 from sqlalchemy import func
 import cloudinary
 import cloudinary.uploader
-import os
-
-cloudinary.config(
-    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-    api_key=os.getenv("CLOUDINARY_API_KEY"),
-    api_secret=os.getenv("CLOUDINARY_API_SECRET")
-)
 
 load_dotenv()
+
+cloudinary_url = os.getenv("CLOUDINARY_URL")
+if cloudinary_url:
+    cloudinary.config(cloudinary_url=cloudinary_url)
+else:
+    cloudinary.config(
+        cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+        api_key=os.getenv("CLOUDINARY_API_KEY"),
+        api_secret=os.getenv("CLOUDINARY_API_SECRET")
+    )
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True, expose_headers=['Authorization'])
@@ -91,6 +94,7 @@ class DimVideo(db.Model):
     video_id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     video_url = db.Column(db.String(500), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)  # ADD THIS
     capture_device = db.Column(db.String(100), nullable=True)
     upload_date = db.Column(db.Date, default=datetime.today().date)
     dataset_version = db.Column(db.String(50), default="v1.0")
@@ -347,10 +351,14 @@ def upload_video():
         return jsonify({"error": "Title, sign category, and sign name are required"}), 400
     
     # Upload video to Cloudinary
-    upload_result = cloudinary.uploader.upload(
-        file,
-        resource_type="video"
-    )
+    try:
+        upload_result = cloudinary.uploader.upload(
+            file,
+            resource_type="video"
+        )
+    except Exception as exc:
+        return jsonify({"error": f"Cloudinary upload failed: {str(exc)}"}), 500
+
     video_url = upload_result["secure_url"]
     
     # Get or create sign
@@ -364,6 +372,7 @@ def upload_video():
     video = DimVideo(
         title=title,
         video_url=video_url,
+        file_path=video_url,
         capture_device=capture_device,
         upload_date=datetime.today().date()
     )
