@@ -1,6 +1,26 @@
-import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
+
 import '../services/api_service.dart';
+
+class _SelectedVideo {
+  const _SelectedVideo({
+    required this.name,
+    required this.bytes,
+    required this.captureDevice,
+    this.path,
+  });
+
+  final String name;
+  final List<int> bytes;
+  final String captureDevice;
+  final String? path;
+
+  double get sizeInMb => bytes.length / 1024 / 1024;
+  bool get isRecordedLive => captureDevice == 'Live Recording';
+}
 
 class UploadScreen extends StatefulWidget {
   const UploadScreen({super.key});
@@ -12,75 +32,342 @@ class UploadScreen extends StatefulWidget {
 class _UploadScreenState extends State<UploadScreen> {
   final titleController = TextEditingController();
   final glossController = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
+
   String? selectedCategory;
-  PlatformFile? selectedFile;
+  _SelectedVideo? selectedVideo;
+  bool consentToUpload = false;
+  bool recordingAccepted = false;
   bool isUploading = false;
 
-  // Updated sign categories - Health and Education
   final List<String> categories = ['Health', 'Education'];
 
+  @override
+  void dispose() {
+    titleController.dispose();
+    glossController.dispose();
+    super.dispose();
+  }
+
   Future<void> pickVideo() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.platform.pickFiles(
       type: FileType.video,
       withData: true,
     );
 
-    if (result != null) {
-      setState(() {
-        selectedFile = result.files.first;
-      });
+    if (result == null || result.files.isEmpty) {
+      return;
     }
+
+    final file = result.files.first;
+    if (file.bytes == null) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to read video bytes. Please choose another file.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      selectedVideo = _SelectedVideo(
+        name: file.name,
+        bytes: file.bytes!,
+        captureDevice: 'File Upload',
+        path: file.path,
+      );
+      recordingAccepted = false;
+      consentToUpload = false;
+    });
+  }
+
+  Future<void> recordLiveVideo() async {
+    try {
+      final recordedVideo = await _imagePicker.pickVideo(
+        source: ImageSource.camera,
+        maxDuration: const Duration(minutes: 2),
+      );
+
+      if (recordedVideo == null) {
+        return;
+      }
+
+      final bytes = await recordedVideo.readAsBytes();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        selectedVideo = _SelectedVideo(
+          name: recordedVideo.name,
+          bytes: bytes,
+          captureDevice: 'Live Recording',
+          path: recordedVideo.path,
+        );
+        recordingAccepted = false;
+        consentToUpload = false;
+      });
+
+      final accepted = await _showVideoPreviewDialog(requireDecision: true);
+      if (!mounted) {
+        return;
+      }
+
+      if (accepted) {
+        setState(() {
+          recordingAccepted = true;
+        });
+      } else {
+        setState(() {
+          selectedVideo = null;
+          recordingAccepted = false;
+          consentToUpload = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Live recording is unavailable on this device or permission was denied. Error: $e',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<VideoPlayerController?> _createPreviewController() async {
+    final video = selectedVideo;
+    final path = video?.path;
+    if (video == null || path == null || path.isEmpty) {
+      return null;
+    }
+
+    final controller = VideoPlayerController.contentUri(Uri.file(path));
+    await controller.initialize();
+    controller.setLooping(true);
+    return controller;
+  }
+
+  Future<bool> _showVideoPreviewDialog({required bool requireDecision}) async {
+    final video = selectedVideo;
+    if (video == null) {
+      return false;
+    }
+
+    VideoPlayerController? controller;
+    bool playerReady = false;
+
+    try {
+      controller = await _createPreviewController();
+      playerReady = controller != null;
+      if (playerReady) {
+        await controller.play();
+      }
+    } catch (_) {
+      playerReady = false;
+      await controller?.dispose();
+      controller = null;
+    }
+
+    if (!mounted) {
+      await controller?.dispose();
+      return false;
+    }
+
+    final decision = await showDialog<bool>(
+      context: context,
+      barrierDismissible: !requireDecision,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(
+            requireDecision ? 'Preview Live Recording' : 'Video Preview',
+          ),
+          content: SizedBox(
+            width: 560,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (playerReady && controller != null)
+                  AspectRatio(
+                    aspectRatio: controller.value.aspectRatio,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: VideoPlayer(controller),
+                    ),
+                  )
+                else
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Preview is unavailable on this platform. You can still continue.',
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                Text('File: ${video.name}'),
+                Text('Size: ${video.sizeInMb.toStringAsFixed(2)} MB'),
+              ],
+            ),
+          ),
+          actions: requireDecision
+              ? [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancel Recording'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Accept Recording'),
+                  ),
+                ]
+              : [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Close'),
+                  ),
+                ],
+        );
+      },
+    );
+
+    await controller?.pause();
+    await controller?.dispose();
+    return decision ?? false;
+  }
+
+  Future<bool> _confirmSubmission() async {
+    final video = selectedVideo;
+    if (video == null) {
+      return false;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Confirm Submission'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('You are about to submit this video:'),
+              const SizedBox(height: 10),
+              Text('Title: ${titleController.text.trim()}'),
+              Text('Category: ${selectedCategory ?? '-'}'),
+              Text('Gloss: ${glossController.text.trim()}'),
+              Text('Source: ${video.captureDevice}'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Review Again'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Confirm & Submit'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return confirmed ?? false;
   }
 
   Future<void> uploadVideo() async {
     if (titleController.text.isEmpty ||
         selectedCategory == null ||
         glossController.text.isEmpty ||
-        selectedFile == null) {
+        selectedVideo == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Please fill in all fields and select a video"),
+          content: Text('Please fill in all fields and select a video'),
         ),
       );
+      return;
+    }
+
+    if (selectedVideo!.isRecordedLive && !recordingAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please preview and accept your live recording first.'),
+        ),
+      );
+      return;
+    }
+
+    if (!consentToUpload) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please provide consent before submitting this video.'),
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await _confirmSubmission();
+    if (!confirmed) {
       return;
     }
 
     setState(() => isUploading = true);
 
     try {
-      bool success = await ApiService.uploadVideo(
-        titleController.text,
+      final success = await ApiService.uploadVideo(
+        titleController.text.trim(),
         selectedCategory!,
         glossController.text.trim(),
-        selectedFile!.bytes!,
-        selectedFile!.name,
-        'Web Upload',
+        selectedVideo!.bytes,
+        selectedVideo!.name,
+        selectedVideo!.captureDevice,
       );
+
+      if (!mounted) {
+        return;
+      }
 
       setState(() => isUploading = false);
 
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Video uploaded successfully!")),
+          const SnackBar(content: Text('Video uploaded successfully!')),
         );
 
-        // Clear form
         setState(() {
           titleController.clear();
           glossController.clear();
           selectedCategory = null;
-          selectedFile = null;
+          selectedVideo = null;
+          consentToUpload = false;
+          recordingAccepted = false;
         });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Upload failed. Please try again.")),
+          const SnackBar(content: Text('Upload failed. Please try again.')),
         );
       }
     } catch (e) {
+      if (!mounted) {
+        return;
+      }
       setState(() => isUploading = false);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -93,12 +380,12 @@ class _UploadScreenState extends State<UploadScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Upload Sign Language Video",
+              'Upload Sign Language Video',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              "Contribute to the medical sign language dataset",
+              'Contribute to the medical sign language dataset',
               style: TextStyle(color: Colors.grey[600]),
             ),
             const SizedBox(height: 30),
@@ -112,7 +399,7 @@ class _UploadScreenState extends State<UploadScreen> {
                     borderRadius: BorderRadius.circular(15),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -121,12 +408,11 @@ class _UploadScreenState extends State<UploadScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Video Title
                       TextField(
                         controller: titleController,
                         decoration: InputDecoration(
-                          labelText: "Video Title",
-                          hintText: "e.g., Sign for fever - Patient demo",
+                          labelText: 'Video Title',
+                          hintText: 'e.g., Sign for fever - Patient demo',
                           prefixIcon: const Icon(Icons.title),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -134,12 +420,10 @@ class _UploadScreenState extends State<UploadScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-
-                      // Sign Category - Health or Education
                       DropdownButtonFormField<String>(
                         initialValue: selectedCategory,
                         decoration: InputDecoration(
-                          labelText: "Sign Category",
+                          labelText: 'Sign Category',
                           prefixIcon: const Icon(Icons.category),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -160,14 +444,12 @@ class _UploadScreenState extends State<UploadScreen> {
                         },
                       ),
                       const SizedBox(height: 20),
-
-                      // Gloss - User types in the meaning of the sign
                       TextField(
                         controller: glossController,
                         decoration: InputDecoration(
-                          labelText: "Gloss",
+                          labelText: 'Gloss',
                           hintText:
-                              "Type the meaning/interpretation of the sign",
+                              'Type the meaning/interpretation of the sign',
                           prefixIcon: const Icon(Icons.sign_language),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -175,8 +457,6 @@ class _UploadScreenState extends State<UploadScreen> {
                         ),
                       ),
                       const SizedBox(height: 25),
-
-                      // File Selection
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(20),
@@ -186,7 +466,7 @@ class _UploadScreenState extends State<UploadScreen> {
                         ),
                         child: Column(
                           children: [
-                            if (selectedFile == null) ...[
+                            if (selectedVideo == null) ...[
                               Icon(
                                 Icons.video_file,
                                 size: 48,
@@ -194,18 +474,24 @@ class _UploadScreenState extends State<UploadScreen> {
                               ),
                               const SizedBox(height: 10),
                               Text(
-                                "No video selected",
+                                'No video selected',
                                 style: TextStyle(color: Colors.grey[600]),
                               ),
                               const SizedBox(height: 15),
                               ElevatedButton.icon(
                                 onPressed: pickVideo,
                                 icon: const Icon(Icons.cloud_upload),
-                                label: const Text("Select Video File"),
+                                label: const Text('Select Video File'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF1E88E5),
                                   foregroundColor: Colors.white,
                                 ),
+                              ),
+                              const SizedBox(height: 10),
+                              OutlinedButton.icon(
+                                onPressed: recordLiveVideo,
+                                icon: const Icon(Icons.videocam),
+                                label: const Text('Record Live Video'),
                               ),
                             ] else ...[
                               Icon(
@@ -215,31 +501,109 @@ class _UploadScreenState extends State<UploadScreen> {
                               ),
                               const SizedBox(height: 10),
                               Text(
-                                selectedFile!.name,
+                                selectedVideo!.name,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               Text(
-                                "${(selectedFile!.size / 1024 / 1024).toStringAsFixed(2)} MB",
+                                '${selectedVideo!.sizeInMb.toStringAsFixed(2)} MB • ${selectedVideo!.captureDevice}',
                                 style: TextStyle(
                                   color: Colors.grey[600],
                                   fontSize: 12,
                                 ),
                               ),
                               const SizedBox(height: 15),
-                              TextButton.icon(
-                                onPressed: pickVideo,
-                                icon: const Icon(Icons.refresh),
-                                label: const Text("Change File"),
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: [
+                                  TextButton.icon(
+                                    onPressed: pickVideo,
+                                    icon: const Icon(Icons.refresh),
+                                    label: const Text('Change File'),
+                                  ),
+                                  if (selectedVideo!.isRecordedLive)
+                                    TextButton.icon(
+                                      onPressed: recordLiveVideo,
+                                      icon: const Icon(Icons.videocam),
+                                      label: const Text('Record Again'),
+                                    ),
+                                  TextButton.icon(
+                                    onPressed: () {
+                                      _showVideoPreviewDialog(
+                                        requireDecision:
+                                            selectedVideo!.isRecordedLive,
+                                      ).then((accepted) {
+                                        if (!mounted ||
+                                            selectedVideo == null ||
+                                            !selectedVideo!.isRecordedLive) {
+                                          return;
+                                        }
+                                        setState(() {
+                                          recordingAccepted = accepted;
+                                          if (!accepted) {
+                                            selectedVideo = null;
+                                            consentToUpload = false;
+                                          }
+                                        });
+                                      });
+                                    },
+                                    icon: const Icon(Icons.play_circle),
+                                    label: const Text('Preview'),
+                                  ),
+                                ],
                               ),
+                              if (selectedVideo!.isRecordedLive) ...[
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      recordingAccepted
+                                          ? Icons.verified
+                                          : Icons.info_outline,
+                                      size: 18,
+                                      color: recordingAccepted
+                                          ? Colors.green
+                                          : Colors.orange,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        recordingAccepted
+                                            ? 'Recording accepted. You can proceed to consent and submit.'
+                                            : 'Preview and accept this recording before submitting.',
+                                        style: TextStyle(
+                                          color: recordingAccepted
+                                              ? Colors.green
+                                              : Colors.orange,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ],
                         ),
                       ),
+                      const SizedBox(height: 18),
+                      CheckboxListTile(
+                        value: consentToUpload,
+                        onChanged: (value) {
+                          setState(() {
+                            consentToUpload = value ?? false;
+                          });
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: const Text(
+                          'I confirm I have consent and permission to submit this video for the dataset.',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
                       const SizedBox(height: 30),
-
-                      // Upload Button
                       SizedBox(
                         width: double.infinity,
                         height: 50,
@@ -267,7 +631,7 @@ class _UploadScreenState extends State<UploadScreen> {
                                     Icon(Icons.cloud_upload),
                                     SizedBox(width: 10),
                                     Text(
-                                      "Upload Video",
+                                      'Upload Video',
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
